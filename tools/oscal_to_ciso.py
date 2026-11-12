@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""OSCAL catalog·mapping-collection → CISO Assistant 라이브러리 YAML 변환.
+"""OSCAL catalog·profile·mapping-collection → CISO Assistant 라이브러리 YAML 변환.
 
-catalog 하나는 framework 라이브러리 하나가 되고, mapping-collection 의 mapping 하나는
+catalog 하나는 framework 라이브러리 하나가 된다. catalog 의 group 은 평가하지 않는 상위 노드,
+control 은 평가 노드가 된다. 그 catalog 를 import 하는 profile(include-controls 의 with-ids 만 지원)은
+framework 의 implementation group 이 되고, 각 평가 노드에는 자신이 속한 group 이 붙는다. mapping-collection 의 mapping 하나는
 requirement_mapping_set 라이브러리 하나가 된다. 관계 값은 아래 표로만 바꾸고,
 표에 없는 값(equivalent-to, no-relationship)은 CISO Assistant 행에서 빼고 보고서에 남긴다.
 
@@ -17,6 +19,7 @@ requirement_mapping_set 라이브러리 하나가 된다. 관계 값은 아래 �
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,7 +28,7 @@ import yaml
 import outdir
 
 URN = "urn:3iuy:risk"
-PROVIDER = "kr-compliance-ai crossmap"
+PROVIDER = "3iuy-prog/ucg-assist"
 PACKAGER = "3iuy-prog/ucg-assist"
 NS = "https://github.com/3iuy-prog/ucg-assist/ns/crossmap"
 
@@ -44,46 +47,91 @@ def _prop(obj: dict, name: str) -> str | None:
     return None
 
 
+VERSION_RE = re.compile(r"-(\d{4})-(\d{2})-(\d{2})-r(\d{2})$")
+
+
 def _version(md: dict) -> int:
-    # metadata.version "crossmap-YYYY-MM-DD-rNN" → YYYYMMDDNN.
+    # metadata.version "<이름>-YYYY-MM-DD-rNN" → YYYYMMDDNN.
     # CISO Assistant 는 version 이 커질 때만 라이브러리를 갱신한다.
-    v = md["version"]
-    prefix, _, rev = v.rpartition("-r")
-    date = prefix.removeprefix("crossmap-")
-    if not (v.startswith("crossmap-") and len(date) == 10 and len(rev) == 2 and rev.isdigit()):
-        raise ValueError(f"알 수 없는 metadata.version 형식입니다: {v!r}")
-    return int(date.replace("-", "") + rev)
+    m = VERSION_RE.search(md["version"])
+    if not m:
+        raise ValueError(f"알 수 없는 metadata.version 형식입니다: {md['version']!r}")
+    return int("".join(m.groups()))
 
 
 def node_urn(slug: str, control_id: str) -> str:
     return f"{URN}:req_node:{slug}:{control_id}".lower()
 
 
-def framework_library(slug: str, doc: dict) -> dict:
+def _control_node(slug: str, c: dict, depth: int, parent: str | None, groups: dict[str, list[str]]) -> dict:
+    notes = []
+    if _prop(c, "crossmap-verified") == "false":
+        notes.append("crossmap 미검증 항목")
+    links = [l["href"] for l in c.get("links", [])]
+    if links:
+        notes.append("원문: " + " ".join(links))
+    node = {
+        "urn": node_urn(slug, c["id"]),
+        "assessable": True,
+        "depth": depth,
+        "ref_id": _prop(c, "label") or c["id"],
+        "name": c["title"],
+    }
+    if parent:
+        node["parent_urn"] = parent
+    statement = [p["prose"] for p in c.get("parts", []) if p.get("name") == "statement" and p.get("prose")]
+    if statement:
+        node["description"] = "\n".join(statement)
+    if notes:
+        node["annotation"] = "\n".join(notes)
+    member = [g for g, ids in groups.items() if c["id"] in ids]
+    if member:
+        node["implementation_groups"] = member
+    return node
+
+
+def framework_library(slug: str, doc: dict, profiles: list[dict] | None = None) -> dict:
+    """catalog 하나 → framework 라이브러리. profiles 는 이 catalog 를 import 하는 profile 들이다."""
     cat = doc["catalog"]
     md = cat["metadata"]
+    groups: dict[str, list[str]] = {}
+    group_defs = []
+    for prof in profiles or []:
+        pmd = prof["profile"]["metadata"]
+        gid = _prop(pmd, "implementation-group")
+        ids = [cid for inc in prof["profile"]["imports"][0]["include-controls"] for cid in inc["with-ids"]]
+        groups[gid] = ids
+        group_defs.append({"ref_id": gid, "name": pmd["title"].split(" — ")[-1],
+                           "description": _prop(pmd, "basis") or ""})
     nodes = []
-    for c in cat.get("controls", []):
-        verified = _prop(c, "crossmap-verified")
-        notes = []
-        if verified == "false":
-            notes.append("crossmap 미검증 항목")
-        links = [l["href"] for l in c.get("links", [])]
-        if links:
-            notes.append("원문: " + " ".join(links))
-        node = {
-            "urn": node_urn(slug, c["id"]),
-            "assessable": True,
-            "depth": 1,
-            "ref_id": _prop(c, "label") or c["id"],
-            "name": c["title"],
-        }
-        if notes:
-            node["annotation"] = "\n".join(notes)
-        nodes.append(node)
-    desc = [f"{k}: {v}" for k in ("source-kind", "source-version", "isms-version")
+
+    def walk(node: dict, depth: int, parent: str | None) -> None:
+        for g in node.get("groups", []):
+            urn = node_urn(slug, g["id"])
+            gn = {"urn": urn, "assessable": False, "depth": depth,
+                  "ref_id": _prop(g, "label") or g["id"], "name": g["title"]}
+            if parent:
+                gn["parent_urn"] = parent
+            nodes.append(gn)
+            walk(g, depth + 1, urn)
+        for c in node.get("controls", []):
+            nodes.append(_control_node(slug, c, depth, parent, groups))
+
+    walk(cat, 1, None)
+    desc = [f"{k}: {v}" for k in ("source-kind", "source-version", "applies", "isms-version")
             if (v := _prop(md, k))]
-    desc.append(f"crossmap sha256: {_prop(md, 'crossmap-sha256')}")
+    for k in ("crossmap-sha256", "source-sha256"):
+        if v := _prop(md, k):
+            desc.append(f"{k}: {v}")
+    framework = {
+        "urn": f"{URN}:framework:{slug}",
+        "ref_id": slug,
+        "name": md["title"],
+        "description": "\n".join(desc),
+        "requirement_nodes": nodes,
+    }
+    if group_defs:
+        framework["implementation_groups_definition"] = group_defs
     return {
         "urn": f"{URN}:library:{slug}",
         "locale": "ko",
@@ -94,15 +142,7 @@ def framework_library(slug: str, doc: dict) -> dict:
         "publication_date": md["last-modified"][:10],
         "provider": PROVIDER,
         "packager": PACKAGER,
-        "objects": {
-            "framework": {
-                "urn": f"{URN}:framework:{slug}",
-                "ref_id": slug,
-                "name": md["title"],
-                "description": "\n".join(desc),
-                "requirement_nodes": nodes,
-            }
-        },
+        "objects": {"framework": framework},
     }
 
 
@@ -181,8 +221,14 @@ def main() -> int:
         return 2
     report = {"mapped": 0, "excluded": []}
     n = 0
+    profiles_by_catalog: dict[str, list[dict]] = {}
+    for f in sorted((src / "profiles").glob("*.json")) if (src / "profiles").is_dir() else []:
+        prof = json.loads(f.read_text(encoding="utf-8"))
+        href = prof["profile"]["imports"][0]["href"]
+        profiles_by_catalog.setdefault(Path(href).stem, []).append(prof)
     for f in sorted((src / "catalogs").glob("*.json")):
-        lib = framework_library(f.stem, json.loads(f.read_text(encoding="utf-8")))
+        lib = framework_library(f.stem, json.loads(f.read_text(encoding="utf-8")),
+                                profiles_by_catalog.get(f.stem))
         (out / f"{f.stem}.yaml").write_text(dump(lib), encoding="utf-8")
         n += 1
     mpath = src / "mapping-collection.json"

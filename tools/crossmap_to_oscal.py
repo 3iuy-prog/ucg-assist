@@ -1,41 +1,21 @@
-#!/usr/bin/env python3
-"""crossmap.json → OSCAL 1.2.3 catalog·mapping-collection 변환.
+"""crossmap.json → OSCAL 법령·고시 catalog 와 mapping-collection.
 
-입력은 kr-compliance-ai(ai-a3sc)의 data/crossmap.json 이다. 변환은 코드만 한다.
+입력은 kr-compliance-ai(ai-a3sc)의 data/crossmap.json 이다. 변환은 코드만 한다(tools/build.py 가 부른다).
+매핑의 source 는 ISMS-P 인증기준 별표 7 catalog(annex_to_oscal.py 가 만든다)의 control 이다.
 관계 종류는 crossmap.json 에 사람이 적은 값만 쓰고, 비어 있으면 OSCAL 에 넣지 않고
-보고서(report.json)에 '관계 미정'으로 남긴다. 같은 입력이면 같은 출력이 나오도록
-UUID 는 uuid5, 날짜는 crossmap.json 의 _meta.updated 로 정한다.
-
-사용:
-  python3 tools/crossmap_to_oscal.py <crossmap.json> <출력 폴더>
+보고서에 '관계 미정'으로 남긴다. 같은 입력이면 같은 출력이 나오도록 UUID 는 uuid5,
+날짜는 crossmap.json 의 _meta.updated 로 정한다.
 """
 from __future__ import annotations
 
-import argparse
-import hashlib
-import json
-import sys
-import uuid
-from pathlib import Path
+from oscal_common import NS, metadata, prop, uid  # noqa: F401
 
-import outdir
-
-OSCAL_VERSION = "1.2.3"
-NS = "https://github.com/3iuy-prog/ucg-assist/ns/crossmap"
-UUID_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/3iuy-prog/ucg-assist")
-
-# OSCAL Mapping 모델의 관계 값(NIST OSCAL 1.2.3 mapping 모델 문서 기준).
 RELATIONSHIPS = {
     "equivalent-to", "equal-to", "subset-of", "superset-of", "intersects-with", "no-relationship",
 }
 MATCHING_RATIONALES = {"syntactic", "semantic", "functional"}
 METHODS = {"human", "automation", "hybrid"}
 STATUSES = {"complete", "not-complete", "draft", "deprecated", "superseded"}
-
-ISMS_CATALOG = {
-    "slug": "isms-p",
-    "title": "ISMS-P 인증기준 (crossmap 수록 항목)",
-}
 
 # crossmap.json 의 이름 → 카탈로그. 모르는 이름이 나오면 변환을 멈춘다(추측하지 않는다).
 SOURCES = {
@@ -88,14 +68,6 @@ class ConversionError(Exception):
     pass
 
 
-def uid(*parts: str) -> str:
-    return str(uuid.uuid5(UUID_NS, "|".join(parts)))
-
-
-def prop(name: str, value: str) -> dict:
-    return {"name": name, "ns": NS, "value": value}
-
-
 def article_id(article: str) -> str:
     # "제29조" → "art-29", "제15조의2" → "art-15-2"
     a = article.strip()
@@ -107,25 +79,9 @@ def article_id(article: str) -> str:
     return f"art-{body}"
 
 
-def isms_id(code: str) -> str:
-    if not code.replace(".", "").isdigit():
-        raise ConversionError(f"ISMS-P 항목 번호 형식을 알 수 없습니다: {code!r}")
-    return f"isms-p-{code}"
-
-
-def metadata(title: str, updated: str, version: str, extra_props: list | None = None) -> dict:
-    md = {
-        "title": title,
-        "last-modified": f"{updated}T00:00:00+09:00",
-        "version": version,
-        "oscal-version": OSCAL_VERSION,
-    }
-    if extra_props:
-        md["props"] = extra_props
-    return md
-
-
-def convert(crossmap: dict, source_sha256: str, revision: int = 0) -> tuple[dict[str, dict], dict | None, dict]:
+def convert(crossmap: dict, source_sha256: str, revision: int, isms_slug: str,
+            isms_catalog: dict) -> tuple[dict[str, dict], dict | None, dict]:
+    """crossmap 의 ISMS-P 항목은 isms_catalog(별표 7 catalog)의 control 을 가리킨다."""
     meta = crossmap.get("_meta", {})
     updated = meta.get("updated")
     if not updated or len(updated) != 10:
@@ -136,25 +92,27 @@ def convert(crossmap: dict, source_sha256: str, revision: int = 0) -> tuple[dict
     version = f"crossmap-{updated}-r{revision:02d}"
     src_props = [prop("crossmap-sha256", source_sha256)]
 
-    isms_controls: dict[str, dict] = {}
+    isms_titles = {}
+    for area in isms_catalog["catalog"]["groups"]:
+        for field in area["groups"]:
+            for c in field["controls"]:
+                isms_titles[c["id"]] = c["title"]
+    seen_isms: set[str] = set()
     target_controls: dict[str, dict[str, dict]] = {}
     maps_by_target: dict[str, list] = {}
-    report = {"source_sha256": source_sha256, "unresolved": [], "mapped": 0}
+    report = {"source_sha256": source_sha256, "unresolved": [], "mapped": 0, "isms_name_mismatch": []}
 
     for entry in crossmap.get("controls", []):
         isms = entry["isms"]
-        sid = isms_id(isms["id"])
-        if sid in isms_controls:
+        sid = f"isms-p-{isms['id']}"
+        if sid not in isms_titles:
+            raise ConversionError(f"ISMS-P 항목이 별표 7 에 없습니다: {isms['id']}")
+        if sid in seen_isms:
             raise ConversionError(f"ISMS-P 항목이 중복됩니다: {isms['id']}")
-        isms_controls[sid] = {
-            "id": sid,
-            "title": isms["name"],
-            "props": [
-                {"name": "label", "value": isms["id"]},
-                prop("domain", isms.get("domain", "")),
-                prop("crossmap-verified", "true" if isms.get("verified") else "false"),
-            ],
-        }
+        seen_isms.add(sid)
+        if isms.get("name") != isms_titles[sid]:
+            report["isms_name_mismatch"].append(
+                {"id": isms["id"], "crossmap": isms.get("name"), "annex": isms_titles[sid]})
         for group in ("notice", "law"):
             for ref in entry.get(group, []):
                 key = (ref["layer"], ref["name"])
@@ -199,14 +157,14 @@ def convert(crossmap: dict, source_sha256: str, revision: int = 0) -> tuple[dict
                 if not basis:
                     raise ConversionError(f"relationship_basis(판단 근거 문장)가 필요합니다: {link_desc}")
                 m = {
-                    "uuid": uid("map", sid, cat["slug"], tid),
+                    "uuid": uid("map", isms_slug, sid, cat["slug"], tid),
                     "matching-rationale": mr,
                     "relationship": rel,
                     "sources": [{"type": "control", "id-ref": sid}],
                     "targets": [{"type": "control", "id-ref": tid}],
                     "props": [
-                        prop("source-verified", "true" if isms.get("verified") else "false"),
-                        prop("target-verified", "true" if ref.get("verified") else "false"),
+                        prop("crossmap-isms-verified", "true" if isms.get("verified") else "false"),
+                        prop("crossmap-target-verified", "true" if ref.get("verified") else "false"),
                     ],
                     "remarks": basis,
                 }
@@ -214,16 +172,6 @@ def convert(crossmap: dict, source_sha256: str, revision: int = 0) -> tuple[dict
                 report["mapped"] += 1
 
     catalogs: dict[str, dict] = {}
-    catalogs[ISMS_CATALOG["slug"]] = {
-        "catalog": {
-            "uuid": uid("catalog", ISMS_CATALOG["slug"]),
-            "metadata": metadata(
-                ISMS_CATALOG["title"], updated, version,
-                src_props + [prop("isms-version", meta.get("isms_version", "미기재"))],
-            ),
-            "controls": sorted(isms_controls.values(), key=lambda c: c["id"]),
-        }
-    }
     for (layer, name), cat in sorted(SOURCES.items(), key=lambda kv: kv[1]["slug"]):
         controls = target_controls.get(cat["slug"])
         if not controls:
@@ -253,8 +201,8 @@ def convert(crossmap: dict, source_sha256: str, revision: int = 0) -> tuple[dict
         mappings = []
         for slug in sorted(maps_by_target):
             mappings.append({
-                "uuid": uid("mapping", ISMS_CATALOG["slug"], slug),
-                "source-resource": {"type": "catalog", "href": f"catalogs/{ISMS_CATALOG['slug']}.json"},
+                "uuid": uid("mapping", isms_slug, slug),
+                "source-resource": {"type": "catalog", "href": f"catalogs/{isms_slug}.json"},
                 "target-resource": {"type": "catalog", "href": f"catalogs/{slug}.json"},
                 "maps": sorted(maps_by_target[slug], key=lambda m: (m["sources"][0]["id-ref"], m["targets"][0]["id-ref"])),
             })
@@ -272,40 +220,3 @@ def convert(crossmap: dict, source_sha256: str, revision: int = 0) -> tuple[dict
             }
         }
     return catalogs, mapping, report
-
-
-def dump(obj: dict) -> str:
-    return json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("crossmap", type=Path)
-    ap.add_argument("out", type=Path)
-    ap.add_argument("--revision", type=int, default=0,
-                    help="같은 _meta.updated 날짜 안에서 올리는 번호(0~99). 라이브러리 버전의 끝 두 자리가 된다.")
-    a = ap.parse_args(argv)
-    raw = a.crossmap.read_bytes()
-    try:
-        catalogs, mapping, report = convert(json.loads(raw), hashlib.sha256(raw).hexdigest(), a.revision)
-    except ConversionError as e:
-        print(f"변환 실패: {e}", file=sys.stderr)
-        return 2
-    try:
-        outdir.prepare(a.out)
-    except outdir.OutputDirError as e:
-        print(f"출력 폴더 오류: {e}", file=sys.stderr)
-        return 2
-    (a.out / "catalogs").mkdir()
-    for slug, doc in catalogs.items():
-        (a.out / "catalogs" / f"{slug}.json").write_text(dump(doc), encoding="utf-8")
-    mpath = a.out / "mapping-collection.json"
-    if mapping:
-        mpath.write_text(dump(mapping), encoding="utf-8")
-    (a.out / "report.json").write_text(dump(report), encoding="utf-8")
-    print(f"catalog {len(catalogs)}개, 매핑 {report['mapped']}건, 관계 미정 {len(report['unresolved'])}건")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

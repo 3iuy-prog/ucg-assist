@@ -6,8 +6,8 @@ NIST 스키마의 정규식은 \\p{L}·\\p{N}(유니코드 문자 범주)을 쓰
 그래서 검사 전에 \\p{L} 을 [^\\W\\d_](유니코드 글자), \\p{N} 을 \\d(유니코드 숫자)로 바꾼다.
 \\d 는 Nd 범주만 맞추므로 \\p{N} 보다 좁다(검사가 더 엄격해지는 쪽).
 
-또 OSCAL 스키마가 표현하지 못하는 제약(map 의 relationship 허용값, mapping 이 가리키는
-catalog 파일·control ID 존재)을 추가로 검사한다.
+또 OSCAL 스키마가 표현하지 못하는 제약(map 의 relationship 허용값, mapping·profile 이 가리키는
+catalog 파일·control ID 존재, catalog 안 control ID 중복, profile 은 include-controls 의 with-ids 만)을 추가로 검사한다.
 
 사용:
   python3 tools/validate_oscal.py <출력 폴더>
@@ -26,6 +26,7 @@ SCHEMA_DIR = ROOT / "schemas" / "oscal-1.2.3"
 SCHEMA_SHA256 = {
     "oscal_catalog_schema.json": "ab95836e9e8dfeb6fde80007f6cc76fa3192f595d427c751a3f3923c3f474fc2",
     "oscal_mapping_schema.json": "ed28b68c8e56cc7d39f0c6076a5d7da3e8100fbe25abf5bb731120bd34f8817e",
+    "oscal_profile_schema.json": "7c5ff5a92683b6a80ce6a3474dea04e0ea8680a4ecb60702ffa08ebfc677e6cb",
 }
 RELATIONSHIPS = {
     "equivalent-to", "equal-to", "subset-of", "superset-of", "intersects-with", "no-relationship",
@@ -46,15 +47,53 @@ def schema_errors(doc: dict, schema: dict) -> list[str]:
     return [f"{'/'.join(map(str, e.absolute_path))}: {e.message}" for e in v.iter_errors(doc)]
 
 
+def catalog_control_ids(catalog: dict) -> list[str]:
+    ids: list[str] = []
+
+    def walk(node: dict) -> None:
+        for c in node.get("controls", []):
+            ids.append(c["id"])
+            walk(c)
+        for g in node.get("groups", []):
+            walk(g)
+
+    walk(catalog)
+    return ids
+
+
 def validate_dir(out: Path) -> list[str]:
     errors: list[str] = []
     cat_schema = load_schema("oscal_catalog_schema.json")
     map_schema = load_schema("oscal_mapping_schema.json")
+    prof_schema = load_schema("oscal_profile_schema.json")
     control_ids: dict[str, set[str]] = {}
     for f in sorted((out / "catalogs").glob("*.json")):
         doc = json.loads(f.read_text(encoding="utf-8"))
         errors += [f"{f.name}: {e}" for e in schema_errors(doc, cat_schema)]
-        control_ids[f"catalogs/{f.name}"] = {c["id"] for c in doc["catalog"].get("controls", [])}
+        ids = catalog_control_ids(doc["catalog"])
+        if len(ids) != len(set(ids)):
+            errors.append(f"{f.name}: control ID 가 중복됩니다.")
+        control_ids[f"catalogs/{f.name}"] = set(ids)
+    for f in sorted((out / "profiles").glob("*.json")) if (out / "profiles").is_dir() else []:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        errors += [f"{f.name}: {e}" for e in schema_errors(doc, prof_schema)]
+        imports = doc["profile"]["imports"]
+        if len(imports) != 1:
+            errors.append(f"{f.name}: import 는 하나만 지원합니다.")
+            continue
+        imp = imports[0]
+        href = imp["href"].removeprefix("../")
+        if href not in control_ids:
+            errors.append(f"{f.name}: 가리키는 catalog 가 없습니다: {imp['href']}")
+            continue
+        if set(imp) - {"href", "include-controls"} or set(doc["profile"]) - {"uuid", "metadata", "imports"}:
+            errors.append(f"{f.name}: include-controls 외의 profile 기능은 지원하지 않습니다.")
+        for inc in imp.get("include-controls", []):
+            if set(inc) != {"with-ids"}:
+                errors.append(f"{f.name}: include-controls 는 with-ids 만 지원합니다.")
+            for cid in inc.get("with-ids", []):
+                if cid not in control_ids[href]:
+                    errors.append(f"{f.name}: {href} 에 없는 control 입니다: {cid}")
     mpath = out / "mapping-collection.json"
     if mpath.exists():
         doc = json.loads(mpath.read_text(encoding="utf-8"))

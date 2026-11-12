@@ -1,0 +1,138 @@
+{
+  "notice": {
+    "title": "정보보호 및 개인정보보호 관리체계 인증 등에 관한 고시",
+    "number": "제2024-8호",
+    "promulgated": "2024-07-24",
+    "effective": "2024-07-24",
+    "agency": "개인정보보호위원회, 과학기술정보통신부",
+    "url": "https://www.law.go.kr/행정규칙/정보보호및개인정보보호관리체계인증등에관한고시"
+  },
+  "retrieved": "2026-11-12",
+  "retrieved_with": "korean-law-mcp@4.15.8 CLI (법제처 Open API): get_annexes --bylSeq 000700·000702·000703, get_admin_rule --jo 제23조. 별표 원본은 HWP이고, 이 파일들은 CLI가 HWP에서 뽑은 텍스트를 그대로 저장한 것이다.",
+  "copyright": "고시는 저작권법 제7조제2호에 따라 보호받지 못하는 저작물이다.",
+  "files": {
+    "annex-7.txt": {
+      "label": "별표 7",
+      "sha256": "bb75c3785e77a31b346767bf0b1bb7cebede2a2a19f9b86b96d6170b80fbcfdd"
+    },
+    "annex-7-2.txt": {
+      "label": "별표 7의2",
+      "sha256": "6f4d1faedf5efd6609c38ddee9d827a9ef1edecf5a471105090eaefcc0e23938"
+    },
+    "annex-7-3.txt": {
+      "label": "별표 7의3",
+      "sha256": "34fe72578a47af2c411f4f5ea3658264cd7b12aac0aff3d97fbfa493c0374d90"
+    },
+    "article-23.txt": {
+      "label": "제23조",
+      "sha256": "9df2656cae08c2cb400d93d6396d26056a6abef512ed1a53b9c95d1566290bb7"
+    }
+  },
+  "annexes": [
+    {
+      "file": "annex-7.txt",
+      "slug": "isms-p-2024-8-annex-7",
+      "title": "ISMS-P 인증기준 (고시 제2024-8호 별표 7)",
+      "applies": "제23조제1항",
+      "expected_counts": {
+        "1": 16,
+        "2": 64,
+        "3": 21
+      },
+      "profiles": [
+        {
+          "group": "ISMS-P",
+          "name": "정보보호 및 개인정보보호 관리체계 인증(ISMS-P)",
+          "areas": [
+            "1",
+            "2",
+            "3"
+          ],
+          "exclude": [],
+          "basis": "제23조제1항제1호: 별표 7 가목부터 다목"
+        },
+        {
+          "group": "ISMS",
+          "name": "정보보호 관리체계 인증(ISMS)",
+          "areas": [
+            "1",
+            "2"
+          ],
+          "exclude": [],
+          "basis": "제23조제1항제2호: 별표 7 가목 및 나목"
+        }
+      ]
+    },
+    {
+      "file": "annex-7-2.txt",
+      "slug": "isms-p-2024-8-annex-7-2",
+      "title": "ISMS-P 인증기준 (고시 제2024-8호 별표 7의2)",
+      "applies": "제23조제3항",
+      "expected_counts": {
+        "1": 8,
+        "2": 33,
+        "3": 21
+      },
+      "profiles": [
+        {
+          "group": "ISMS-P",
+          "name": "정보보호 및 개인정보보호 관리체계 인증(ISMS-P)",
+          "areas": [
+            "1",
+            "2",
+            "3"
+          ],
+          "exclude": [],
+          "basis": "제23조제3항제1호: 별표 7의2 가목부터 다목"
+        },
+        {
+          "group": "ISMS",
+          "name": "정보보호 관리체계 인증(ISMS)",
+          "areas": [
+            "1",
+            "2"
+          ],
+          "exclude": [
+            "1.1.2"
+          ],
+          "basis": "제23조제3항제2호: 별표 7의2 가목(1.1.2. 항목 제외) 및 나목"
+        }
+      ]
+    },
+    {
+      "file": "annex-7-3.txt",
+      "slug": "isms-p-2024-8-annex-7-3",
+      "title": "ISMS-P 인증기준 (고시 제2024-8호 별표 7의3)",
+      "applies": "제23조제4항",
+      "expected_counts": {
+        "1": 11,
+        "2": 33,
+        "3": 21
+      },
+      "profiles": [
+        {
+          "group": "ISMS-P",
+          "name": "정보보호 및 개인정보보호 관리체계 인증(ISMS-P)",
+          "areas": [
+            "1",
+            "2",
+            "3"
+          ],
+          "exclude": [],
+          "basis": "제23조제4항제1호: 별표 7의3 가목부터 다목"
+        },
+        {
+          "group": "ISMS",
+          "name": "정보보호 관리체계 인증(ISMS)",
+          "areas": [
+            "1",
+            "2"
+          ],
+          "exclude": [],
+          "basis": "제23조제4항제2호: 별표 7의3 가목 및 나목"
+        }
+      ]
+    }
+  ],
+  "expected_counts_note": "별표 7 의 16·64·21 은 ISMS-P 101개 체계로 알려진 값이다. 별표 7의2·7의3 의 값은 2026-11-12 조회본을 파싱해 얻은 값으로, 원문이 바뀌면 검사가 실패하도록 고정해 둔 것이다."
+}

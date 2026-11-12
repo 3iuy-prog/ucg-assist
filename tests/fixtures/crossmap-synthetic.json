@@ -11,7 +11,7 @@
   },
   "controls": [
     {
-      "isms": {"id": "9.9.1", "name": "시험 항목 하나", "domain": "시험 영역", "verified": true},
+      "isms": {"id": "2.5.1", "name": "시험 항목 하나", "domain": "시험 영역", "verified": true},
       "notice": [
         {"name": "안전성확보조치 기준", "article": "제5조", "title": "시험 조문 A", "layer": "L2", "verified": true,
          "relationship": "subset-of", "matching_rationale": "semantic", "relationship_basis": "시험 근거 A"}
@@ -24,7 +24,7 @@
       "note": "합성"
     },
     {
-      "isms": {"id": "9.9.2", "name": "시험 항목 둘", "domain": "시험 영역", "verified": false},
+      "isms": {"id": "2.5.5", "name": "특수 계정 및 권한 관리", "domain": "시험 영역", "verified": false},
       "notice": [
         {"name": "안전성확보조치 기준", "article": "제15조의2", "title": "시험 조문 D", "layer": "L2", "verified": false,
          "relationship": "superset-of", "matching_rationale": "semantic", "relationship_basis": "시험 근거 D"}
