@@ -5,7 +5,7 @@ CISO Assistant Community를 컴플라이언스 관리의 중심(Core)으로 두�
 이 저장소는 두 가지 원본으로 OSCAL 문서를 만들고, 그 OSCAL을 CISO Assistant 라이브러리로 바꿉니다. 변환은 모두 코드가 하며, AI가 OSCAL을 직접 만들거나 고치지 않습니다.
 
 - **ISMS-P 인증기준**: 「정보보호 및 개인정보보호 관리체계 인증 등에 관한 고시」(제2024-8호, 2024-07-24 시행)의 별표 7·7의2·7의3 원문(`sources/isms-p/`)
-- **기준 간 매핑**: [kr-compliance-ai](https://github.com/3iuy-prog/kr-compliance-ai)의 `data/crossmap.json`. ISMS-P 인증기준 항목을 안전성 확보조치 기준(고시)과 법령 조문에 연결합니다.
+- **기준 간 매핑**: [law-assist](https://github.com/3iuy-prog/law-assist)의 `data/crossmap.json`. ISMS-P 인증기준 항목을 안전성 확보조치 기준(고시)과 법령 조문에 연결합니다.
 
 ```
 sources/isms-p/(고시 별표) ─┐
@@ -21,7 +21,7 @@ crossmap.json ──────────────┘                     
 sh scripts/setup.sh                                   # .env 에 DJANGO_SECRET_KEY 생성
 docker compose up -d                                  # https://localhost:8443
 docker compose exec backend python manage.py createsuperuser
-python3 tools/build.py --crossmap <kr-compliance-ai>/data/crossmap.json --out build/oscal
+python3 tools/build.py --crossmap <law-assist>/data/crossmap.json --out build/oscal
 python3 tools/validate_oscal.py build/oscal
 python3 tools/oscal_to_ciso.py build/oscal build/ciso # build/ciso/*.yaml 을 라이브러리로 올린다
 ```
@@ -69,7 +69,7 @@ docker compose exec backend python manage.py createsuperuser
 ## 변환과 가져오기
 
 ```sh
-python3 tools/build.py --crossmap <kr-compliance-ai>/data/crossmap.json --out build/oscal
+python3 tools/build.py --crossmap <law-assist>/data/crossmap.json --out build/oscal
 python3 tools/validate_oscal.py build/oscal
 python3 tools/oscal_to_ciso.py build/oscal build/ciso
 ```

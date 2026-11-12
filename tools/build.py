@@ -2,7 +2,7 @@
 """OSCAL 생성: ISMS-P 별표 catalog·profile + crossmap 법령 catalog·mapping-collection.
 
 사용:
-  python3 tools/build.py --crossmap <kr-compliance-ai>/data/crossmap.json --out build/oscal [--revision N]
+  python3 tools/build.py --crossmap <law-assist>/data/crossmap.json --out build/oscal [--revision N]
 
 출력 폴더는 비우고 다시 쓴다(tools/outdir.py). 결과:
   catalogs/<slug>.json, profiles/<slug>.json, mapping-collection.json(관계가 있을 때), report.json

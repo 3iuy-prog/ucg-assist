@@ -1,6 +1,6 @@
 """crossmap.json → OSCAL 법령·고시 catalog 와 mapping-collection.
 
-입력은 kr-compliance-ai(ai-a3sc)의 data/crossmap.json 이다. 변환은 코드만 한다(tools/build.py 가 부른다).
+입력은 law-assist(ai-a3sc)의 data/crossmap.json 이다. 변환은 코드만 한다(tools/build.py 가 부른다).
 매핑의 source 는 ISMS-P 인증기준 별표 7 catalog(annex_to_oscal.py 가 만든다)의 control 이다.
 관계 종류는 crossmap.json 에 사람이 적은 값만 쓰고, 비어 있으면 OSCAL 에 넣지 않고
 보고서에 '관계 미정'으로 남긴다. 같은 입력이면 같은 출력이 나오도록 UUID 는 uuid5,
