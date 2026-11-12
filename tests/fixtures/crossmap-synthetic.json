@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "title": "합성 crossmap (시험용)",
+    "desc": "변환기 시험용 합성 데이터. 실제 매핑 판단이 아니다.",
+    "isms_version": "시험용",
+    "notice_version": "시험용 판",
+    "updated": "2026-01-02",
+    "mapping_method": "human",
+    "mapping_status": "draft",
+    "mapping_matching_rationale": "semantic"
+  },
+  "controls": [
+    {
+      "isms": {"id": "9.9.1", "name": "시험 항목 하나", "domain": "시험 영역", "verified": true},
+      "notice": [
+        {"name": "안전성확보조치 기준", "article": "제5조", "title": "시험 조문 A", "layer": "L2", "verified": true,
+         "relationship": "subset-of", "matching_rationale": "semantic", "relationship_basis": "시험 근거 A"}
+      ],
+      "law": [
+        {"name": "개인정보보호법", "article": "제29조", "title": "시험 조문 B", "layer": "L1", "verified": true,
+         "relationship": "intersects-with", "matching_rationale": "functional", "relationship_basis": "시험 근거 B"},
+        {"name": "신용정보법", "article": "제19조", "title": "시험 조문 C", "layer": "L1", "verified": true}
+      ],
+      "note": "합성"
+    },
+    {
+      "isms": {"id": "9.9.2", "name": "시험 항목 둘", "domain": "시험 영역", "verified": false},
+      "notice": [
+        {"name": "안전성확보조치 기준", "article": "제15조의2", "title": "시험 조문 D", "layer": "L2", "verified": false,
+         "relationship": "superset-of", "matching_rationale": "semantic", "relationship_basis": "시험 근거 D"}
+      ],
+      "law": [
+        {"name": "개인정보보호법", "article": "제29조", "title": "시험 조문 B", "layer": "L1", "verified": true,
+         "relationship": "equivalent-to", "matching_rationale": "semantic", "relationship_basis": "시험 근거 E"},
+        {"name": "전자금융거래법", "article": "제21조", "title": "시험 조문 F", "layer": "L1", "verified": true,
+         "relationship": "equal-to", "matching_rationale": "syntactic", "relationship_basis": "시험 근거 F"},
+        {"name": "정보통신망법", "article": "제45조", "title": "시험 조문 G", "layer": "L1", "verified": true,
+         "relationship": "no-relationship", "matching_rationale": "semantic", "relationship_basis": "시험 근거 G"}
+      ],
+      "note": "합성"
+    }
+  ]
+}

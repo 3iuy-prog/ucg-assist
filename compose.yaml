@@ -1,0 +1,122 @@
+# CISO Assistant Community v4.2.3 — 공식 docker-compose.yml(v4.2.3 태그)을 바탕으로
+# 이미지를 태그와 digest로 고정하고, 다른 스택과 이름이 겹치지 않도록 container_name을 뺐다.
+# Community 이미지만 쓴다(enterprise 이미지·디렉터리는 쓰지 않는다).
+name: ucg-assist
+
+x-backend-env: &backend-env
+  ALLOWED_HOSTS: backend,localhost
+  CISO_ASSISTANT_URL: https://localhost:8443
+  AUTH_TOKEN_TTL: "7200"
+  HOME: /tmp
+  XDG_CACHE_HOME: /tmp/.cache
+  XDG_CONFIG_HOME: /tmp/.config
+  XDG_DATA_HOME: /tmp/.local/share
+  QDRANT_URL: http://qdrant:6333
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?scripts/setup.sh 로 .env 를 먼저 만드세요}
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:rw,noexec,nosuid,nodev"]
+
+services:
+  backend:
+    image: ghcr.io/intuitem/ciso-assistant-community/backend:v4.2.3@sha256:8bfef3274dba9304afd45aed7efb28eb743ddbf481d4ae742a21db0f5df77a68
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      DJANGO_DEBUG: "False"
+    <<: *hardening
+    volumes:
+      - ./db:/code/db
+    user: "1001:1001"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://backend:8000/api/health/', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 150s
+
+  huey:
+    image: ghcr.io/intuitem/ciso-assistant-community/backend:v4.2.3@sha256:8bfef3274dba9304afd45aed7efb28eb743ddbf481d4ae742a21db0f5df77a68
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *backend-env
+      DJANGO_DEBUG: "False"
+    <<: *hardening
+    volumes:
+      - ./db:/code/db
+    entrypoint: ["/bin/sh", "-c", "python manage.py run_huey -w 2 --scheduler-interval 60"]
+    user: "1001:1001"
+
+  frontend:
+    image: ghcr.io/intuitem/ciso-assistant-community/frontend:v4.2.3@sha256:daf567cf9b882b7f39027e4b774c038427575100cf687ab2e9e3923418ff93db
+    restart: unless-stopped
+    environment:
+      PUBLIC_BACKEND_API_URL: http://backend:8000/api
+      PUBLIC_BACKEND_API_EXPOSED_URL: https://localhost:8443/api
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+      ADDRESS_HEADER: x-forwarded-for
+      XFF_DEPTH: "1"
+    <<: *hardening
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    # 공식 compose 는 127.0.0.1:6333 을 연다. 이 저장소에서는 호스트에 열지 않는다.
+
+  # MCP 서버(선택): docker compose --profile mcp up -d. 읽기 전용, 호출자마다 자기 PAT 를 보낸다.
+  mcp:
+    image: ghcr.io/intuitem/ciso-assistant-community/mcp:v4.2.3@sha256:37ed4e47d7e8d8a9f7a878fd326f3f674e6c709ccff92f8f352acde8691725bb
+    profiles: [mcp]
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      API_URL: http://backend:8000/api
+      CA_MCP_TRANSPORT: streamable-http
+      CA_MCP_HOST: 0.0.0.0
+      CA_MCP_PORT: "8001"
+      CA_MCP_READ_ONLY: "true"
+      CA_MCP_ALLOWED_HOSTS: localhost:8443
+      CA_MCP_ALLOW_ENV_TOKEN: "false"
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      XDG_CONFIG_HOME: /tmp/.config
+      XDG_DATA_HOME: /tmp/.local/share
+    <<: *hardening
+    user: "1001:1001"
+
+  caddy:
+    image: caddy:2.11.4@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52
+    restart: unless-stopped
+    environment:
+      CISO_ASSISTANT_URL: https://localhost:8443
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:8443:8443
+    volumes:
+      - ./db/caddy:/data/caddy
+    command: |
+      sh -c 'echo $$CISO_ASSISTANT_URL "{
+      reverse_proxy /api/* backend:8000
+      reverse_proxy /mcp* mcp:8001
+      reverse_proxy /* frontend:3000
+      tls internal
+      }" > Caddyfile && caddy run'
+
+volumes:
+  qdrant_data:
